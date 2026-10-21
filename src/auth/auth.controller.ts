@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Req, UseGuards, Headers, UnauthorizedException } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -92,5 +92,23 @@ export class AuthController {
   async resetPassword(@Body() dto: ResetPasswordDto, @Req() req: Request): Promise<{ success: boolean }> {
     await this.authService.resetPassword(dto, req.ip);
     return { success: true };
+  }
+
+  @Post('admin/2fa/enable')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  enableAdminTwoFactor(@Req() req: Request & { user: { merchantId: string } }) {
+    return this.authService.enableAdminTwoFactor(req.user.merchantId);
+  }
+
+  @Post('admin/2fa/verify')
+  @HttpCode(HttpStatus.OK)
+  verifyAdminTwoFactor(
+    @Body() body: { code: string; accessToken?: string },
+    @Headers('authorization') authorization?: string,
+  ) {
+    const token = body.accessToken ?? authorization?.replace(/^Bearer\s+/i, '');
+    if (!token) throw new UnauthorizedException('A 2FA challenge token is required');
+    return this.authService.verifyAdminTwoFactor(token, body.code);
   }
 }

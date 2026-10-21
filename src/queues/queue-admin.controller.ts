@@ -10,10 +10,11 @@ import { QueueMetricsService } from './queue-metrics.service';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { QUEUE_NAMES } from './queue.constants';
+import { AdminTwoFactorGuard } from '../auth/guards/admin-two-factor.guard';
 
 @ApiTags('admin/queues')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, AdminTwoFactorGuard, RolesGuard)
 @Roles(MerchantRole.ADMIN)
 @ApiErrors()
 @Controller('admin/queues')
