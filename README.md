@@ -1,5 +1,8 @@
 # DupDub Backend
 
+[![CI](https://github.com/dupdub/dupdub-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/dupdub/dupdub-backend/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/dupdub/dupdub-backend/branch/main/graph/badge.svg)](https://codecov.io/gh/dupdub/dupdub-backend)
+
 > Crypto-to-fiat settlement API — merchants accept USDC on Stellar, customers pay from a wallet, and the platform settles fiat to the merchant's bank account.
 
 This is the backend service for the DupDub payment platform. It exposes a REST API (NestJS), watches the Stellar network for incoming payments, drives the payment/settlement lifecycle, and talks to the on-chain Soroban contracts that hold funds in escrow.
@@ -187,6 +190,8 @@ API_KEY_SALT=your_api_key_salt
 ```
 
 #### Stellar / Soroban
+```bash
+STELLAR_NETWORK=TESTNET
 
 See [Stellar Configuration](#stellar-configuration) below for the full variable reference and testnet/mainnet setup.
 
