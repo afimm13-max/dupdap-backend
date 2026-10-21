@@ -16,6 +16,8 @@ export class MetricsService {
   readonly cacheRequestsTotal: Counter<string>;
   readonly openAdminAlerts: Gauge<string>;
   readonly dbSlowQueryTotal: Counter<string>;
+  readonly openAmlFlags: Gauge<string>;
+  readonly amlResolutionTimeSeconds: Gauge<string>;
 
   constructor() {
     this.paymentCreatedTotal = new Counter({
@@ -82,6 +84,8 @@ export class MetricsService {
       help: 'Number of currently open admin alerts',
       labelNames: ['type'],
     });
+    this.openAmlFlags = new Gauge({ name: 'aml_open_flags', help: 'Number of AML flags awaiting review' });
+    this.amlResolutionTimeSeconds = new Gauge({ name: 'aml_average_resolution_time_seconds', help: 'Average AML flag resolution time in seconds' });
   }
 
   incrementPaymentCreated(type: string): void {
