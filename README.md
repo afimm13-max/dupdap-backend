@@ -187,28 +187,58 @@ API_KEY_SALT=your_api_key_salt
 ```
 
 #### Stellar / Soroban
-```bash
-STELLAR_NETWORK=TESTNET                 # or PUBLIC
-STELLAR_ACCOUNT_SECRET=SXXX...          # platform deposit account
-STELLAR_ACCOUNT_PUBLIC=GXXX...
-STELLAR_USDC_ISSUER=GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5
-STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
 
-SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
-SOROBAN_SOURCE_PUBLIC_KEY=GXXX...
-SOROBAN_SOURCE_SECRET=SXXX...
-SOROBAN_NETWORK_PASSPHRASE=
+See [Stellar Configuration](#stellar-configuration) below for the full variable reference and testnet/mainnet setup.
 
-SOROBAN_CONTRACT_ID=                    # payment_escrow contract, used by StellarService.invokeContract()
-STELLAR_USDC_CONTRACT_ID=               # SEP-41 USDC contract; blank disables the Soroban fallback monitor
-SOROBAN_ESCROW_CONTRACT_ID=             # written by dupdapp_stellar's payment_escrow deploy script
-SOROBAN_ESCROW_CONTRACT_ID_TESTNET=
-SOROBAN_ESCROW_CONTRACT_ID_MAINNET=
+## Stellar Configuration
 
-STELLAR_WALLET_ENCRYPTION_KEY=          # AES-256-GCM key used to encrypt per-user Stellar secret keys at rest
-```
+The service talks to Stellar through two endpoints: Horizon (classic operations, payment monitoring) and Soroban RPC (escrow contract calls and SEP-41 event polling). `STELLAR_NETWORK` selects the network and drives the defaults for everything else.
 
-> After deploying/redeploying `payment_escrow` from the `dupdapp_stellar` repo, copy the contract ID it prints into `SOROBAN_ESCROW_CONTRACT_ID*` here.
+### Variables
+
+Defaults shown are the values used when the variable is unset. "—" means no default: the variable is optional or must be provided.
+
+| Variable | Default | Description |
+|---|---|---|
+| `STELLAR_NETWORK` | `TESTNET` | `TESTNET` or `PUBLIC`. Selects the network passphrase and the default Horizon URL. |
+| `STELLAR_HORIZON_URL` | `https://horizon-testnet.stellar.org` (`https://horizon.stellar.org` when `STELLAR_NETWORK=PUBLIC`) | Horizon REST endpoint for classic payments and account lookups. |
+| `STELLAR_ACCOUNT_SECRET` | — | Secret key (`S...`) of the platform account. Used to sign transactions; the service fails to send transactions without it. Never commit. |
+| `STELLAR_ACCOUNT_PUBLIC` | derived from `STELLAR_ACCOUNT_SECRET` | Public key (`G...`) of the platform deposit account. |
+| `STELLAR_USDC_ISSUER` | `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5` | Issuer of the classic USDC asset. Override with the mainnet issuer for `PUBLIC`. |
+| `STELLAR_USDC_CONTRACT_ID` | — | SEP-41 USDC token contract ID (`C...`) for Soroban event monitoring. Blank disables the Soroban fallback monitor. |
+| `SOROBAN_RPC_URL` | `https://soroban-testnet.stellar.org` | Soroban RPC endpoint. **Required**: the Soroban module refuses to start without it. |
+| `SOROBAN_NETWORK_PASSPHRASE` | derived from `STELLAR_NETWORK` | Explicit network passphrase. Leave blank unless you need a custom network; if blank and `STELLAR_NETWORK` is neither `TESTNET` nor `PUBLIC`, the passphrase is fetched from the RPC. |
+| `SOROBAN_SOURCE_SECRET` | `STELLAR_ACCOUNT_SECRET` | Secret key that signs Soroban contract invocations. Set separately to use a different source account. |
+| `SOROBAN_SOURCE_PUBLIC_KEY` | `STELLAR_ACCOUNT_PUBLIC` | Public key matching `SOROBAN_SOURCE_SECRET`. |
+| `SOROBAN_CONTRACT_ID` | — | `payment_escrow` contract ID (`C...`) called by `invokeContract()`. Also used by the Soroban event indexer. |
+| `SOROBAN_ESCROW_CONTRACT_ID` | — | Escrow contract ID polled by the Soroban monitor for state-transition events. Blank skips the poll. |
+| `SOROBAN_ESCROW_CONTRACT_ID_TESTNET` | — | Written by the `dupdapp_stellar` deploy script. Not read by this service; copy the active value into `SOROBAN_ESCROW_CONTRACT_ID`. |
+| `SOROBAN_ESCROW_CONTRACT_ID_MAINNET` | — | Same as above, for mainnet. |
+| `ENCRYPTION_KEY` | — | 32-byte key (raw UTF-8, base64, or hex) used to encrypt per-user Stellar wallet secrets at rest. Required for wallet provisioning. |
+
+### Testnet setup
+
+1. **Keep the testnet defaults.** `STELLAR_NETWORK=TESTNET` is the default; the Horizon and Soroban RPC defaults already point at testnet.
+2. **Generate a platform keypair.** Either use the [Stellar CLI](https://developers.stellar.org/docs/tools/cli) (`stellar keys generate --network testnet`) or `Keypair.random()` from `@stellar/stellar-sdk`. Put the secret in `STELLAR_ACCOUNT_SECRET` and the public key in `STELLAR_ACCOUNT_PUBLIC`.
+3. **Fund the account with the testnet faucet (Friendbot).** Accounts must be funded with XLM before they can send transactions:
+   ```bash
+   curl "https://friendbot.stellar.org/?addr=GXXX..."
+   ```
+4. **Get testnet USDC.** Add a USDC trustline to the account (`STELLAR_USDC_ISSUER`), then request testnet USDC from the [Circle testnet faucet](https://faucet.circle.com) (select Stellar).
+5. **Deploy the escrow contract.** Deploy `payment_escrow` from [`dupdapp_stellar`](../dupdapp_stellar) following that repo's README. Copy the printed contract ID into `SOROBAN_CONTRACT_ID` and `SOROBAN_ESCROW_CONTRACT_ID`.
+6. **Start the service** and check `GET /health/ready`. The Horizon check confirms the endpoint is reachable.
+
+### Mainnet
+
+Set `STELLAR_NETWORK=PUBLIC` and provide mainnet values explicitly rather than relying on the testnet defaults:
+
+- `STELLAR_HORIZON_URL` (or leave unset to use `https://horizon.stellar.org`)
+- `SOROBAN_RPC_URL`: a mainnet Soroban RPC endpoint from your provider
+- `STELLAR_USDC_ISSUER`: the mainnet USDC issuer
+- `STELLAR_USDC_CONTRACT_ID` and `SOROBAN_CONTRACT_ID` / `SOROBAN_ESCROW_CONTRACT_ID`: the mainnet contract IDs from your `dupdapp_stellar` deployment
+- A funded mainnet platform account (`STELLAR_ACCOUNT_SECRET`)
+
+Contract deployment is handled in [`dupdapp_stellar`](../dupdapp_stellar), which owns the Soroban contracts (`payment_escrow`, `merchant_registry`, `settlement_ledger`) and the deploy scripts that print the contract IDs.
 
 #### Fiat settlement partner
 ```bash
