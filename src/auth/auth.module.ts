@@ -12,12 +12,14 @@ import { RateLimitService } from './rate-limit.service';
 import { Merchant } from '../merchants/entities/merchant.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { CacheModule } from '../cache/cache.module';
+import { EmailModule } from '../email/email.module';
 
 @Global()
 @Module({
   imports: [
     TypeOrmModule.forFeature([Merchant]),
     CacheModule,
+    EmailModule,
     NotificationsModule,
     PassportModule,
     JwtModule.registerAsync({
