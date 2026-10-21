@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, GoneException, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, GoneException, Logger, Optional, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,6 +18,17 @@ import { PaginatedResponseDto } from '../common/dto/pagination.dto';
 import { PaymentEscrowService, PaymentExpiredError } from '../blockchain-wallet/payment-escrow.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { TransactionLimitsService } from './transaction-limits.service';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** 422 response for a payment that breaches a merchant's amount limits (#500). */
+const limitExceeded = (message: string) =>
+  new UnprocessableEntityException({
+    statusCode: 422,
+    error: 'Unprocessable Entity',
+    message,
+    code: 'LIMIT_EXCEEDED',
+  });
 
 // Events emitted per payment in a batch — mirrors contract PaymentCreated events
 export interface PaymentCreatedEvent {
@@ -100,12 +111,47 @@ export class PaymentsService {
     return rate;
   }
 
+  /**
+   * Rejects with 422 LIMIT_EXCEEDED if any amount exceeds the merchant's
+   * single-transaction limit, or if the batch total plus payments created in the
+   * last 24h exceeds the merchant's daily limit (#500).
+   */
+  private async assertWithinAmountLimits(merchantId: string, amountsUsd: Big[]): Promise<void> {
+    const merchant = await this.merchants.findOne(merchantId);
+
+    if (amountsUsd.some((amount) => amount.gt(merchant.singleTransactionLimitUsd))) {
+      throw limitExceeded(
+        `Payment amount exceeds the single transaction limit of ${merchant.singleTransactionLimitUsd} USD`,
+      );
+    }
+
+    const { total } = await this.paymentsRepo
+      .createQueryBuilder('payment')
+      .select('COALESCE(SUM(payment.amountUsd), 0)', 'total')
+      .where('payment.merchantId = :merchantId', { merchantId })
+      .andWhere('payment.createdAt >= :since', { since: new Date(Date.now() - DAY_MS) })
+      .andWhere('payment.status NOT IN (:...excluded)', {
+        excluded: [PaymentStatus.FAILED, PaymentStatus.EXPIRED],
+      })
+      .getRawOne<{ total: string }>();
+
+    const requestedUsd = amountsUsd.reduce((sum, amount) => sum.plus(amount), new Big(0));
+    if (new Big(total).plus(requestedUsd).gt(merchant.dailyLimitUsd)) {
+      throw limitExceeded(
+        `Payment would exceed the daily limit of ${merchant.dailyLimitUsd} USD`,
+      );
+    }
+  }
+
   async create(merchantId: string, dto: CreatePaymentDto): Promise<Payment> {
     // Enforce per-merchant rolling 24h transaction limits (#553).
     await this.txLimits?.checkAndIncrement(merchantId);
 
+    const amountUsd = new Big(dto.amountUsd);
+    await this.assertWithinAmountLimits(merchantId, [amountUsd]);
+
     const xlmRate = await this.resolveXlmRate();
-    const amountXlm = new Big(dto.amountUsd).div(xlmRate);
+    const amountXlm = amountUsd.div(xlmRate);
 
     const memo = this.stellar.generateMemo();
     const depositAddress = this.stellar.getDepositAddress();
@@ -245,6 +291,11 @@ export class PaymentsService {
         );
       }
     }
+
+    await this.assertWithinAmountLimits(
+      merchantId,
+      items.map((item) => new Big(item.amountUsd)),
+    );
 
     // ── Build all payment records in memory ───────────────────────────────────
     const xlmRate = await this.resolveXlmRate();
