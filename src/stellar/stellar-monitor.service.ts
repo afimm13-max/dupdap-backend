@@ -250,7 +250,7 @@ export class StellarMonitorService implements OnModuleInit {
         asset,
       });
 
-      await this.settlements.initiateSettlement(locked);
+      await this.settlements.initiateSettlement(locked, manager);
     });
   }
 
