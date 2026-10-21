@@ -319,6 +319,139 @@ Merchants register a URL via `POST /webhooks`; deliveries are HMAC-signed with `
 - `payment.failed` — settlement failed
 - `payment.refunded` — a payment was refunded
 
+#### Verifying webhook signatures
+
+Every delivery is a `POST` with a JSON body and two headers:
+
+| Header | Value |
+|---|---|
+| `X-Webhook-Signature` | Lowercase hex HMAC-SHA256 of the raw request body, keyed with the webhook's secret |
+| `X-Webhook-Event` | Event name, e.g. `payment.confirmed` |
+| `X-Webhook-Replay` | `true` only on deliveries re-sent via `POST /webhooks/replay` |
+
+The body is `{ "event": "...", "data": { ... }, "timestamp": "2026-10-20T12:00:00.000Z" }`. The signature covers the exact bytes received, so verify against the raw body **before** parsing or re-serialising JSON. The secret is the one you supplied when creating the webhook (`secret` on `POST /webhooks`) or the generated value returned for it.
+
+Verification steps:
+
+1. Read the raw body as bytes or a string.
+2. Compute `HMAC-SHA256(secret, rawBody)` and hex-encode it.
+3. Compare it to `X-Webhook-Signature` with a constant-time comparison.
+4. Parse the body and check `timestamp` for replay protection (see below).
+
+**Node.js** (Express — use `express.raw` so the body is not parsed first):
+
+```js
+const crypto = require('crypto');
+const express = require('express');
+
+const app = express();
+const SECRET = process.env.DUPDUB_WEBHOOK_SECRET;
+const MAX_AGE_MS = 5 * 60 * 1000;
+
+app.post('/webhooks/dupdub', express.raw({ type: 'application/json' }), (req, res) => {
+  const received = req.get('X-Webhook-Signature') || '';
+  const expected = crypto.createHmac('sha256', SECRET).update(req.body).digest('hex');
+
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(received, 'utf8');
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return res.status(401).send('invalid signature');
+  }
+
+  const payload = JSON.parse(req.body.toString('utf8'));
+  if (Math.abs(Date.now() - Date.parse(payload.timestamp)) > MAX_AGE_MS) {
+    return res.status(401).send('stale webhook');
+  }
+
+  // handle payload.event / payload.data here
+  res.sendStatus(200);
+});
+```
+
+**Python** (Flask):
+
+```python
+import hmac
+import hashlib
+import json
+import os
+from datetime import datetime, timezone
+
+from flask import Flask, request, abort
+
+app = Flask(__name__)
+SECRET = os.environ["DUPDUB_WEBHOOK_SECRET"].encode()
+MAX_AGE_SECONDS = 5 * 60
+
+
+@app.post("/webhooks/dupdub")
+def dupdub_webhook():
+    raw = request.get_data()  # raw bytes, before any JSON parsing
+    expected = hmac.new(SECRET, raw, hashlib.sha256).hexdigest()
+    received = request.headers.get("X-Webhook-Signature", "")
+    if not hmac.compare_digest(expected, received):
+        abort(401)
+
+    payload = json.loads(raw)
+    sent_at = datetime.fromisoformat(payload["timestamp"].replace("Z", "+00:00"))
+    age = (datetime.now(timezone.utc) - sent_at).total_seconds()
+    if abs(age) > MAX_AGE_SECONDS:
+        abort(401)
+
+    # handle payload["event"] / payload["data"] here
+    return "", 200
+```
+
+**PHP**:
+
+```php
+<?php
+
+$secret = getenv('DUPDUB_WEBHOOK_SECRET');
+$maxAgeSeconds = 5 * 60;
+
+$raw = file_get_contents('php://input'); // raw body, before any parsing
+$expected = hash_hmac('sha256', $raw, $secret);
+$received = $_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] ?? '';
+
+if (!hash_equals($expected, $received)) {
+    http_response_code(401);
+    exit('invalid signature');
+}
+
+$payload = json_decode($raw, true);
+$sentAt = strtotime($payload['timestamp']);
+if ($sentAt === false || abs(time() - $sentAt) > $maxAgeSeconds) {
+    http_response_code(401);
+    exit('stale webhook');
+}
+
+// handle $payload['event'] / $payload['data'] here
+http_response_code(200);
+```
+
+#### Replay protection
+
+The `timestamp` field is inside the signed body, so an attacker cannot change it without breaking the signature. Reject deliveries whose `timestamp` is outside a tolerance window (5 minutes in the examples above).
+
+Be aware of two cases where the original `timestamp` is older than the time you receive the request:
+
+- **Retries.** Failed deliveries are retried on the schedule in `WEBHOOK_RETRY_DELAYS_MS` (up to hours later). Retries re-send the original body, so they keep the original `timestamp`.
+- **Replays.** Deliveries from `POST /webhooks/replay` also keep the original `timestamp` and set `X-Webhook-Replay: true`.
+
+If you apply a strict freshness check, either accept these cases with a wider window for them, or deduplicate on a hash of the raw body (`SHA-256(rawBody)`) for a period at least as long as your retry window. Payloads have no separate event ID, so the raw body hash is the stable identifier for a given event.
+
+#### Testing your setup
+
+`POST /api/v1/webhooks/test` (requires the `webhooks:manage` scope) sends a signed `webhook.test` event to every active webhook on your account, regardless of which events each one subscribes to. Use it to confirm your endpoint is reachable and that your signature check passes:
+
+```bash
+curl -X POST https://<your-api-host>/api/v1/webhooks/test \
+  -H "X-API-Key: $DUPDUB_API_KEY"
+```
+
+The response returns `{ "enqueued": <number of webhooks> }`. Deliveries are asynchronous; each attempt is recorded in the webhook delivery log with its response code or error.
+
 ## Testing
 
 ```bash
