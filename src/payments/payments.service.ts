@@ -31,6 +31,13 @@ const limitExceeded = (message: string) =>
     code: 'LIMIT_EXCEEDED',
   });
 
+// Format: PAY-[timestamp-base36]-[8-char unique suffix from a UUID v4].
+// The suffix is URL-safe hex, and the `reference` column is UNIQUE at the DB level.
+function generatePaymentReference(timestamp: number = Date.now()): string {
+  const suffix = uuidv4().replace(/-/g, '').substring(0, 8).toUpperCase();
+  return `PAY-${timestamp.toString(36).toUpperCase()}-${suffix}`;
+}
+
 // Events emitted per payment in a batch — mirrors contract PaymentCreated events
 export interface PaymentCreatedEvent {
   type: 'PaymentCreated';
@@ -172,7 +179,7 @@ export class PaymentsService {
 
     const payment = this.paymentsRepo.create({
       id: uuidv4(),
-      reference: `PAY-${Date.now()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+      reference: generatePaymentReference(),
       merchantId,
       amountUsd: String(dto.amountUsd),
       amountXlm: amountXlm.toFixed(7),
@@ -327,7 +334,7 @@ export class PaymentsService {
 
       const record = this.paymentsRepo.create({
         id: uuidv4(),
-        reference: `PAY-${now}-${i}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
+        reference: generatePaymentReference(now),
         merchantId,
         amountUsd: String(item.amountUsd),
         amountXlm: amountXlm.toFixed(7),
