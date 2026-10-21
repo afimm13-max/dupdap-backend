@@ -8,6 +8,7 @@
 This is the backend service for the DupDub payment platform. It exposes a REST API (NestJS), watches the Stellar network for incoming payments, drives the payment/settlement lifecycle, and talks to the on-chain Soroban contracts that hold funds in escrow.
 
 Related repos:
+
 - [`dupdap-frontend`](../dupdap-frontend) — merchant dashboard & customer payment portal (Next.js)
 - [`dupdapp_stellar`](../dupdapp_stellar) — the Soroban smart contracts (`payment_escrow`, `merchant_registry`, `settlement_ledger`, etc.) this service reads from and writes to
 
@@ -53,31 +54,31 @@ merchant sees the settlement in the dashboard
 
 ### Module layout (`src/`)
 
-| Module | Responsibility |
-|---|---|
-| `payments/`, `payment/` | Payment request lifecycle, QR codes, receipts, batch payments |
-| `stellar/` | Horizon polling (`StellarMonitorService`), Soroban event indexing, `StellarService` (SDK wrapper, `invokeContract`) |
-| `soroban/` | Lower-level Soroban RPC client used by wallet provisioning and contract calls |
-| `blockchain-wallet/` | Server-side Stellar keypair provisioning per user (AES-256-GCM encrypted secret storage), balance sync, slippage handling |
-| `settlements/` | Crypto→fiat settlement orchestration, partner callback handling |
-| `merchants/` | Merchant profile, API key issuance/scoping, notification preferences |
-| `webhooks/` | Webhook registration, signed delivery, retry/backoff, failure alerting |
-| `waitlist/` | Public waitlist signup/lookup/stats |
-| `auth/` | Registration/login, JWT + API key guards |
-| `admin/` | Internal admin operations and reporting |
-| `analytics/` | Merchant-facing and platform-wide analytics |
-| `aml/` | Anti-money-laundering checks |
-| `groups/` | Merchant grouping/org structures |
-| `notifications/`, `email/` | Notification preferences and email delivery (SMTP/SendGrid) |
-| `queues/`, `retry/` | Bull/Redis queue definitions and per-queue retry policies |
-| `cache/` | Redis-backed caching (requires a reachable Redis instance) |
-| `cron/` | Scheduled jobs |
-| `backup/` | Database backup to S3 |
-| `audit/` | Audit logging for compliance |
-| `security/` | Security-related guards/utilities |
-| `prometheus/`, `sentry/`, `telemetry/` | Metrics export, error tracking, OpenTelemetry tracing |
-| `health/` | Liveness/readiness endpoints |
-| `common/`, `core/`, `config/`, `database/`, `runtime-config/` | Shared interceptors/filters, TypeORM setup + migrations, config loading |
+| Module                                                        | Responsibility                                                                                                            |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `payments/`, `payment/`                                       | Payment request lifecycle, QR codes, receipts, batch payments                                                             |
+| `stellar/`                                                    | Horizon polling (`StellarMonitorService`), Soroban event indexing, `StellarService` (SDK wrapper, `invokeContract`)       |
+| `soroban/`                                                    | Lower-level Soroban RPC client used by wallet provisioning and contract calls                                             |
+| `blockchain-wallet/`                                          | Server-side Stellar keypair provisioning per user (AES-256-GCM encrypted secret storage), balance sync, slippage handling |
+| `settlements/`                                                | Crypto→fiat settlement orchestration, partner callback handling                                                           |
+| `merchants/`                                                  | Merchant profile, API key issuance/scoping, notification preferences                                                      |
+| `webhooks/`                                                   | Webhook registration, signed delivery, retry/backoff, failure alerting                                                    |
+| `waitlist/`                                                   | Public waitlist signup/lookup/stats                                                                                       |
+| `auth/`                                                       | Registration/login, JWT + API key guards                                                                                  |
+| `admin/`                                                      | Internal admin operations and reporting                                                                                   |
+| `analytics/`                                                  | Merchant-facing and platform-wide analytics                                                                               |
+| `aml/`                                                        | Anti-money-laundering checks                                                                                              |
+| `groups/`                                                     | Merchant grouping/org structures                                                                                          |
+| `notifications/`, `email/`                                    | Notification preferences and email delivery (SMTP/SendGrid)                                                               |
+| `queues/`, `retry/`                                           | Bull/Redis queue definitions and per-queue retry policies                                                                 |
+| `cache/`                                                      | Redis-backed caching (requires a reachable Redis instance)                                                                |
+| `cron/`                                                       | Scheduled jobs                                                                                                            |
+| `backup/`                                                     | Database backup to S3                                                                                                     |
+| `audit/`                                                      | Audit logging for compliance                                                                                              |
+| `security/`                                                   | Security-related guards/utilities                                                                                         |
+| `prometheus/`, `sentry/`, `telemetry/`                        | Metrics export, error tracking, OpenTelemetry tracing                                                                     |
+| `health/`                                                     | Liveness/readiness endpoints                                                                                              |
+| `common/`, `core/`, `config/`, `database/`, `runtime-config/` | Shared interceptors/filters, TypeORM setup + migrations, config loading                                                   |
 
 ### Data flow at a glance
 
@@ -147,21 +148,22 @@ Once running, the API is at `http://localhost:3000/api/v1` and interactive API d
 
 ### Useful scripts
 
-| Script | Purpose |
-|---|---|
-| `pnpm migration:generate` / `migration:run` / `migration:revert` / `migration:show` | TypeORM migrations |
-| `pnpm db:seed` / `db:seed:test` / `db:reset` | Local DB seeding/reset |
-| `pnpm migration:check` / `migration:rollback:check` / `migration:uncommitted:check` | CI safety checks on migrations |
-| `pnpm test:cov` | Unit tests with coverage |
-| `pnpm test:integration` | Integration specs (`*.integration-spec.ts`) |
-| `pnpm test:e2e` | End-to-end specs (`*.e2e-spec.ts`) |
-| `pnpm explain:queries` | Run `EXPLAIN` on the list/query endpoints |
+| Script                                                                              | Purpose                                     |
+| ----------------------------------------------------------------------------------- | ------------------------------------------- |
+| `pnpm migration:generate` / `migration:run` / `migration:revert` / `migration:show` | TypeORM migrations                          |
+| `pnpm db:seed` / `db:seed:test` / `db:reset`                                        | Local DB seeding/reset                      |
+| `pnpm migration:check` / `migration:rollback:check` / `migration:uncommitted:check` | CI safety checks on migrations              |
+| `pnpm test:cov`                                                                     | Unit tests with coverage                    |
+| `pnpm test:integration`                                                             | Integration specs (`*.integration-spec.ts`) |
+| `pnpm test:e2e`                                                                     | End-to-end specs (`*.e2e-spec.ts`)          |
+| `pnpm explain:queries`                                                              | Run `EXPLAIN` on the list/query endpoints   |
 
 ## Environment variables
 
 Full list lives in [`.env.example`](.env.example); the categories below cover what each group is for.
 
 #### Server & CORS
+
 ```bash
 PORT=3000
 API_PREFIX=api/v1
@@ -170,6 +172,7 @@ ALLOWED_ORIGINS=https://app.dupdub.xyz,https://dupdub.xyz   # comma-separated, p
 ```
 
 #### Database
+
 ```bash
 DB_HOST=localhost
 DB_PORT=5432
@@ -183,6 +186,7 @@ DB_IDLE_TIMEOUT_MS=60000
 ```
 
 #### Auth
+
 ```bash
 JWT_SECRET=your_jwt_secret_key_min_32_chars
 JWT_EXPIRES_IN=7d
@@ -190,6 +194,7 @@ API_KEY_SALT=your_api_key_salt
 ```
 
 #### Stellar / Soroban
+
 ```bash
 STELLAR_NETWORK=TESTNET
 
@@ -246,6 +251,7 @@ Set `STELLAR_NETWORK=PUBLIC` and provide mainnet values explicitly rather than r
 Contract deployment is handled in [`dupdapp_stellar`](../dupdapp_stellar), which owns the Soroban contracts (`payment_escrow`, `merchant_registry`, `settlement_ledger`) and the deploy scripts that print the contract IDs.
 
 #### Fiat settlement partner
+
 ```bash
 PARTNER_API_URL=https://partner-api.example.com/v1
 PARTNER_API_KEY=your_partner_api_key
@@ -253,6 +259,7 @@ PARTNER_WEBHOOK_SECRET=your_partner_webhook_secret
 ```
 
 #### Webhooks (outbound, to merchants)
+
 ```bash
 WEBHOOK_SECRET=your_webhook_signing_secret
 WEBHOOK_RETRY_COUNT=5
@@ -260,6 +267,7 @@ WEBHOOK_RETRY_DELAYS_MS=60000,300000,1800000,7200000,43200000
 ```
 
 #### Queues & retries (Bull/Redis)
+
 ```bash
 REDIS_HOST=localhost
 REDIS_PORT=6379
@@ -275,6 +283,7 @@ STELLAR_MONITOR_RETRY_DELAYS_MS=0
 ```
 
 #### Email
+
 ```bash
 EMAIL_PROVIDER=smtp                     # smtp or sendgrid
 EMAIL_SMTP_HOST=smtp.sendgrid.net
@@ -290,6 +299,7 @@ SENDGRID_API_KEY=
 > Two email paths read different SMTP variables. `src/email/nodemailer.service.ts` uses the `EMAIL_SMTP_*` set above. The notifications queue (`src/notifications/email.processor.ts`, used by `NotificationsService.enqueueEmail` for AML alerts etc.) reads `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER` and `SMTP_PASS`; set these too or queued emails will not be delivered. Both read `EMAIL_FROM`.
 
 #### Monitoring, alerting & observability
+
 ```bash
 SENTRY_DSN=https://xxx@sentry.io/xxx
 
@@ -311,6 +321,7 @@ OTEL_TRACE_CONSOLE=false
 ```
 
 #### Admin & backups
+
 ```bash
 ADMIN_ALLOWED_IPS=127.0.0.1,::1
 ADMIN_IP_BYPASS_IN_DEV=true
@@ -329,17 +340,17 @@ BACKUP_RETENTION_DAYS=30
 - **Base path**: all routes below are under `/api/v1` unless noted
 - **Auth**: `Authorization: Bearer <JWT>` (from `/auth/login`) or `X-API-Key: <merchant API key>` — both schemes are wired up in Swagger's "Authorize" button
 
-| Area | Endpoints |
-|---|---|
-| Auth | `POST /auth/register`, `POST /auth/login` |
-| Payments | `POST /payments`, `POST /payments/batch`, `GET /payments`, `GET /payments/stats`, `GET /payments/:id`, `POST /payments/:id/refund`, `GET /pay/:reference` |
+| Area                   | Endpoints                                                                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth                   | `POST /auth/register`, `POST /auth/login`                                                                                                                                 |
+| Payments               | `POST /payments`, `POST /payments/batch`, `GET /payments`, `GET /payments/stats`, `GET /payments/:id`, `POST /payments/:id/refund`, `GET /pay/:reference`                 |
 | Payments (QR/receipts) | `POST /payments`, `GET /payments/:id/status`, `GET /payments/:id/qr-code`, `POST /payments/:id/cancel`, `GET /payments/reference/:reference`, `GET /payments/:id/receipt` |
-| Settlements | `GET /settlements`, `POST /settlements/partner-callback` (partner-facing) |
-| Merchants | `GET /merchants/me`, `PATCH /merchants/me`, `POST /merchants/api-keys`, `GET`/`PATCH /merchants/me/notification-prefs` |
-| Webhooks | `GET /webhooks`, `POST /webhooks`, `DELETE /webhooks/:id` |
-| Wallet | `GET /wallet`, `GET /wallet/balance` |
-| Waitlist | `POST /waitlist/join`, `GET /waitlist/check/:username`, `GET /waitlist/stats` |
-| Health | `GET /health`, `GET /health/ready` (excluded from the `/api/v1` prefix) |
+| Settlements            | `GET /settlements`, `POST /settlements/partner-callback` (partner-facing)                                                                                                 |
+| Merchants              | `GET /merchants/me`, `PATCH /merchants/me`, `POST /merchants/api-keys`, `GET`/`PATCH /merchants/me/notification-prefs`                                                    |
+| Webhooks               | `GET /webhooks`, `POST /webhooks`, `DELETE /webhooks/:id`                                                                                                                 |
+| Wallet                 | `GET /wallet`, `GET /wallet/balance`                                                                                                                                      |
+| Waitlist               | `POST /waitlist/join`, `GET /waitlist/check/:username`, `GET /waitlist/stats`                                                                                             |
+| Health                 | `GET /health`, `GET /health/ready` (excluded from the `/api/v1` prefix)                                                                                                   |
 
 Treat Swagger (`/docs`) as the source of truth for request/response shapes — the table above is a map of what exists, not the full contract.
 
@@ -531,7 +542,26 @@ Pool metrics are exported on `/metrics`:
 ## Handsoff notes
 
 <!-- handsoff-issue-340 -->
+
 - #340: RuntimeConfigService.get() passes a raw number instead of {ttlSeconds} to CacheService.set, silently caching config for 24h instead of 60s
 
 <!-- handsoff-issue-137 -->
+
 - #137: SorobanService contract calls are all TODO stubs, not real contract invocations
+
+### Local quality checks
+
+Use Node.js 20 and pnpm 9, then run `pnpm install --frozen-lockfile`.
+The `prepare` script installs Husky hooks automatically inside a Git checkout.
+If hooks are missing after an install, run `pnpm prepare`.
+
+On commit, lint-staged runs `eslint --fix --max-warnings 0` and
+`prettier --write` on staged TypeScript files, and Prettier on staged JavaScript,
+JSON, Markdown and YAML. Review automatically fixed changes before committing.
+On push, `pnpm typecheck` runs `tsc --noEmit`; fix reported type errors before
+pushing. Run `pnpm lint` for the full zero-warning check and `pnpm lint:fix`
+for automatic fixes. CI runs the same zero-warning lint command.
+
+See [Soroban integration](docs/soroban-integration.md) for contract configuration,
+ABI types and payment sequencing, and [API errors](docs/api-errors.md) for stable
+error codes and recovery actions.
