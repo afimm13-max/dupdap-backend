@@ -15,12 +15,15 @@ import { RateLimitService } from './rate-limit.service';
 import { Merchant } from '../merchants/entities/merchant.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { CacheModule } from '../cache/cache.module';
+import { AuditLog } from '../audit/entities/audit-log.entity';
+import { AdminAlertModule } from '../alerts/admin-alert.module';
 import { EmailModule } from '../email/email.module';
 
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Merchant, MerchantMember]),
+    TypeOrmModule.forFeature([Merchant, MerchantMember, AuditLog]),
+    AdminAlertModule,
     CacheModule,
     EmailModule,
     NotificationsModule,
