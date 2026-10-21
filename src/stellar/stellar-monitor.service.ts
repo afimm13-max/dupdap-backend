@@ -26,6 +26,8 @@ export class StellarMonitorService implements OnModuleInit {
   private lastRunAt: Date | null = null;
   private lastRunStatus: 'idle' | 'ok' | 'error' = 'idle';
   private lastRunError: string | null = null;
+  private lastProcessedLedger: number | null = null;
+  private lagLedgers = 0;
 
   constructor(
     @InjectRepository(Payment)
@@ -70,6 +72,10 @@ export class StellarMonitorService implements OnModuleInit {
       }
 
       const cursor = this.cursors.get(depositAddress);
+      this.logger.log(
+        `Stellar monitor poll start | address: ${depositAddress} | cursor: ${cursor ?? 'none'}`,
+      );
+
       let transactions: any[];
 
       try {
@@ -90,6 +96,11 @@ export class StellarMonitorService implements OnModuleInit {
       for (const tx of transactions) {
         this.cursors.set(depositAddress, tx.paging_token);
 
+        const txLedger = this.parseLedger(tx);
+        if (txLedger !== null) {
+          this.lastProcessedLedger = txLedger;
+        }
+
         const paymentMemo = tx.memo;
         if (!paymentMemo) continue;
 
@@ -105,6 +116,10 @@ export class StellarMonitorService implements OnModuleInit {
 
         const result = await this.stellar.verifyPayment(tx.hash, paymentMemo);
         if (!result.verified) continue;
+
+        this.logger.log(
+          `Stellar payment detected | memo: ${paymentMemo} | amount: ${result.amount} ${result.asset} | tx: ${tx.hash} | reference: ${matched.reference}`,
+        );
 
         try {
           await this.confirmPayment(matched, tx.hash, result.amount, result.asset, result.from);
@@ -123,6 +138,13 @@ export class StellarMonitorService implements OnModuleInit {
 
       // Soroban escrow monitor: poll contract state-transition events
       await this.sorobanMonitor.pollEscrowEvents();
+
+      await this.updateLag(depositAddress);
+
+      this.logger.log(
+        `Stellar monitor poll end | address: ${depositAddress} | cursor: ${this.cursors.get(depositAddress) ?? 'none'} | transactions: ${transactions.length} | lag: ${this.lagLedgers} ledgers`,
+      );
+
       this.markRunSuccess();
     } catch (error) {
       this.markRunFailure(error);
@@ -140,6 +162,36 @@ export class StellarMonitorService implements OnModuleInit {
       status: this.lastRunStatus,
       lastError: this.lastRunError,
     };
+  }
+
+  /**
+   * Current polling lag in ledgers (current ledger minus last processed ledger).
+   * Exposed as the `stellar_monitor_lag_ledgers` gauge.
+   */
+  getLagLedgers(): number {
+    return this.lagLedgers;
+  }
+
+  private async updateLag(depositAddress: string): Promise<void> {
+    try {
+      const currentLedger = await this.stellar.getCurrentLedger();
+      if (currentLedger === null || currentLedger === undefined) return;
+
+      const lastProcessed = this.lastProcessedLedger ?? currentLedger;
+      this.lagLedgers = Math.max(0, currentLedger - lastProcessed);
+
+      this.logger.log(
+        `Stellar monitor lag | current ledger: ${currentLedger} | last processed: ${lastProcessed} | lag: ${this.lagLedgers} ledgers | address: ${depositAddress}`,
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to compute Stellar monitor lag: ${err.message}`);
+    }
+  }
+
+  private parseLedger(tx: any): number | null {
+    const raw = tx?.ledger ?? tx?.ledger_attr ?? tx?.ledgerAttr;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
   private async confirmPayment(
@@ -230,17 +282,7 @@ export class StellarMonitorService implements OnModuleInit {
       {
         merchantName: merchant.businessName,
         reference: payment.reference,
-        amountUsd: Number(payment.amountUsd).toFixed(2),
-        assetAmount,
-        asset,
-        txHash: payment.txHash,
-        txUrl,
-        confirmedAt: payment.confirmedAt?.toISOString() ?? new Date().toISOString(),
-        paymentDetailUrl,
-      },
-      merchant.id,
-    );
-  }
+        amountUsd:
 
   private async queuePaymentConfirmedSms(
     payment: Payment & { merchant?: Merchant },
