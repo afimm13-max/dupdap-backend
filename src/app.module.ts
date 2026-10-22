@@ -1,5 +1,5 @@
 import { BullModule } from '@nestjs/bull';
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -61,14 +61,14 @@ import Redis from 'ioredis';
         try {
           const client = new Redis({ host, port, password });
           await client.ping();
-          console.log('Redis cache connected successfully');
+          new Logger('AppModule').log('Redis cache connected successfully');
           return {
             store: redisStore,
             redisInstance: client,
             ttl,
           };
         } catch (error) {
-          console.warn('Redis cache unavailable, falling back to memory store:', error.message);
+          new Logger('AppModule').warn(`Redis cache unavailable, falling back to memory store: ${error.message}`);
           return {
             store: 'memory',
             ttl,
